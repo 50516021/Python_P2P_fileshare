@@ -3,6 +3,23 @@ import threading
 import os
 import hashlib
 import time
+import sys
+
+# TODO
+# Store a list of available chunks for each file (files are split into multiple chunks, 1, 2, 3... and you broadcast what chunks you have)
+
+# Maintain a list of files available on each peer locally
+# - Broadcast your own files
+# - Receive other broadcasts
+# - Can just be done on the same broadcast port I think... would not work in a real network (scaling issues), but does in this case
+# - So just stick this info in the current broadcast message
+
+# Instead of chunking between just two peers, peers need to be able to receive from multiple at once (every peer who has chunks)
+# - Figure out all the chunks we need, and request them individually
+
+# Verify via hashes
+# - Check hash of each chunk as we get it
+# - Check hash of full file at end
 
 BROADCAST_PORT = 9999
 TRANSFER_PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 10000
