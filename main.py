@@ -5,12 +5,11 @@ import hashlib
 import time
 
 BROADCAST_PORT = 9999
-TRANSFER_PORT = 10000
+TRANSFER_PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 10000
 CHUNK_SIZE = 1024 * 4
-SHARED_DIR = "shared"
+SHARED_DIR = f"shared/{TRANSFER_PORT}"
 
 peers = set()
-
 
 def broadcast_presence():
     '''Broadcast presence on the network to discover peers.
@@ -20,7 +19,7 @@ def broadcast_presence():
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         while True:
-            message = b"P2P_PEER_DISCOVERY"
+            message = f"P2P_PEER_DISCOVERY {TRANSFER_PORT}".encode()
             sock.sendto(message, ("<broadcast>", BROADCAST_PORT))
             time.sleep(5)
 
@@ -31,19 +30,23 @@ def listen_for_peers():
     It runs in a separate thread to continuously listen for new peers.
     '''
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind(('', BROADCAST_PORT))
         while True:
             data, addr = sock.recvfrom(1024)
-            if data == b"P2P_PEER_DISCOVERY":
-                peers.add(addr[0])
+            if b"P2P_PEER_DISCOVERY" in data:
+                if (addr[0], data.split()[1]) not in peers: # (for the sake of notifying when new peer is added)
+                    print("New peer added", addr[0], data.split()[1])
+                    peers.add((addr[0], data.split()[1]))
+            else:
+                print(data)
 
 
 def list_files():
     '''List files available in the shared directory.
-    This function returns a list of filenames in the shared directory.
-    It is used to display available files to the user.
+    Displays the list of files that could be downloaded
     '''
-    return os.listdir(SHARED_DIR)
+    return "TBD"
 
 
 def handle_client(conn, addr):
@@ -82,8 +85,16 @@ def request_file(peer_ip, filename):
     This function connects to a peer's file server, sends the filename,
     and receives the file in chunks, saving it to the shared directory.
     '''
+    peer_port = 10000
+    if ':' in peer_ip:
+        peer_port = int(peer_ip.split(':')[1])
+    else:
+        for peer in peers:
+            if peer_ip in peer[0]:
+                peer_port = peer[1]
+    
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.connect((peer_ip, TRANSFER_PORT))
+        sock.connect((peer_ip, peer_port))
         sock.send(filename.encode())
         output_path = os.path.join(SHARED_DIR, f"dl_{filename}")
         with open(output_path, 'wb') as f:
@@ -131,7 +142,6 @@ if __name__ == "__main__":
     This function initializes the shared directory, starts the broadcast and listening threads,
     and launches the command line interface for user interaction.
     '''
-    # Ensure the shared directory exists
     os.makedirs(SHARED_DIR, exist_ok=True)
     threading.Thread(target=broadcast_presence, daemon=True).start()
     threading.Thread(target=listen_for_peers, daemon=True).start()
