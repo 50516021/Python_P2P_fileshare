@@ -13,6 +13,10 @@ peers = set()
 
 
 def broadcast_presence():
+    '''Broadcast presence on the network to discover peers.
+    This function sends a broadcast message every 5 seconds to announce the presence of this peer.
+    It uses UDP sockets to send the message to the broadcast address.
+    ''' 
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         while True:
@@ -22,6 +26,10 @@ def broadcast_presence():
 
 
 def listen_for_peers():
+    '''Listen for incoming peer discovery messages.
+    This function listens for UDP messages on the broadcast port and adds discovered peers to the set.
+    It runs in a separate thread to continuously listen for new peers.
+    '''
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.bind(('', BROADCAST_PORT))
         while True:
@@ -31,10 +39,18 @@ def listen_for_peers():
 
 
 def list_files():
+    '''List files available in the shared directory.
+    This function returns a list of filenames in the shared directory.
+    It is used to display available files to the user.
+    '''
     return os.listdir(SHARED_DIR)
 
 
 def handle_client(conn, addr):
+    '''Handle incoming file requests from peers.
+    This function receives a connection from a peer, retrieves the requested file,
+    and sends it back to the peer in chunks.
+    '''
     filename = conn.recv(1024).decode()
     print(f"[{addr}] wants file: {filename}")
     filepath = os.path.join(SHARED_DIR, filename)
@@ -47,6 +63,11 @@ def handle_client(conn, addr):
 
 
 def serve_files():
+    '''Serve files to peers that request them.
+    This function listens for incoming TCP connections on a specified port,
+    accepts file requests, and sends the requested files in chunks.
+    It runs in a separate thread to allow concurrent file serving.
+    '''
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
         server.bind(('', TRANSFER_PORT))
         server.listen()
@@ -57,6 +78,10 @@ def serve_files():
 
 
 def request_file(peer_ip, filename):
+    '''Request a file from a peer.
+    This function connects to a peer's file server, sends the filename,
+    and receives the file in chunks, saving it to the shared directory.
+    '''
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.connect((peer_ip, TRANSFER_PORT))
         sock.send(filename.encode())
@@ -68,6 +93,10 @@ def request_file(peer_ip, filename):
 
 
 def sha256sum(path):
+    '''Calculate the SHA-256 checksum of a file.
+    This function reads a file in chunks and computes its SHA-256 hash.
+    It is used to verify file integrity after download.
+    '''
     h = hashlib.sha256()
     with open(path, 'rb') as f:
         while chunk := f.read(4096):
@@ -77,8 +106,10 @@ def sha256sum(path):
 
 def command_line():
     '''Interactive command line for user input to manage the P2P file sharing.
+    This function provides a simple command line interface for users to list files,
+    view peers, request files, or exit the application.
     '''
-    print("Welcome to the P2P File Sharing System")
+    print(" -- Welcome to the P2P File Sharing System -- ")
     print("Type 'list' to see available files, 'peers' to see known peers, 'get [ip] [filename]' to download a file, or 'quit' to exit.")
     global peers
     peers = set()  # Reset peers to avoid duplicates on restart
@@ -98,6 +129,11 @@ def command_line():
 
 
 if __name__ == "__main__":
+    '''Main entry point for the P2P file sharing application.
+    This function initializes the shared directory, starts the broadcast and listening threads,
+    and launches the command line interface for user interaction.
+    '''
+    # Ensure the shared directory exists
     os.makedirs(SHARED_DIR, exist_ok=True)
     threading.Thread(target=broadcast_presence, daemon=True).start()
     threading.Thread(target=listen_for_peers, daemon=True).start()
