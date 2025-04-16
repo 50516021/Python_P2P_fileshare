@@ -104,10 +104,12 @@ def request_file(peer_ip, filename):
     '''
     peer_port = 10000
     if ':' in peer_ip:
-        peer_port = int(peer_ip.split(':')[1])
+        peer_ip, peer_port = peer_ip.split(':')
+        peer_port = int(peer_port)
     else:
         for peer in peers:
             if peer_ip in peer[0]:
+                peer_ip = peer[0]
                 peer_port = peer[1]
     
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
