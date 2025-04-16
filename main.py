@@ -22,8 +22,11 @@ import sys
 # - Check hash of full file at end
 
 BROADCAST_PORT = 9999
-TRANSFER_PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 10000
-CHUNK_SIZE = 1024 * 4
+try:
+    TRANSFER_PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 10000
+except ValueError:
+    print("Error: TRANSFER_PORT must be an integer.")
+    sys.exit(1)
 SHARED_DIR = f"shared/{TRANSFER_PORT}"
 
 peers = set()
