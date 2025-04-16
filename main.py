@@ -112,19 +112,17 @@ def command_line():
     print(" -- Welcome to the P2P File Sharing System -- ")
     print("Type 'list' to see available files, 'peers' to see known peers, 'get [ip] [filename]' to download a file, or 'quit' to exit.")
     global peers
-    peers = set()  # Reset peers to avoid duplicates on restart
-    peers.add(socket.gethostbyname(socket.gethostname()))  # Add self to peers
     while True:
         cmd = input("Command (list / peers / get [ip] [filename] / quit): ").strip().split()
         if not cmd:
             continue
-        if cmd[0] == "list":
+        if cmd[0] in ("list", "l"):
             print("Available files:", list_files())
         elif cmd[0] == "peers":
-            print("Known peers:", peers)
+            print("Known peers:", [f"{ip}:{int(port)}" for ip, port in peers])
         elif cmd[0] == "get" and len(cmd) == 3:
             request_file(cmd[1], cmd[2])
-        elif cmd[0] == "quit":
+        elif cmd[0] in ("q", "quit"):
             break
 
 
