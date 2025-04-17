@@ -29,59 +29,119 @@ except ValueError:
     sys.exit(1)
 SHARED_DIR = f"shared/{TRANSFER_PORT}"
 
+CHUNK_SIZE = 1024
+
 peers = set()
+peer_files = {}
 
 def broadcast_presence():
-    '''Broadcast presence on the network to discover peers.
-    This function sends a broadcast message every 5 seconds to announce the presence of this peer.
-    It uses UDP sockets to send the message to the broadcast address.
-    ''' 
+    '''Broadcast presence and local files on the network.'''
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         while True:
-            message = f"P2P_PEER_DISCOVERY {TRANSFER_PORT}".encode()
-            sock.sendto(message, ("<broadcast>", BROADCAST_PORT))
+            files = get_my_files()
+            message = {
+                "type": "P2P_PEER_DISCOVERY",
+                "port": TRANSFER_PORT,
+                "files": files
+            }
+            sock.sendto(json.dumps(message).encode(), ("<broadcast>", BROADCAST_PORT))
             time.sleep(5)
 
 
+def get_my_files():
+    '''Get a list of available files and their total number of chunks and their full SHA-256 hash.'''
+    file_chunks = {}
+    if not os.path.exists(SHARED_DIR):
+        return file_chunks
+
+    for filename in os.listdir(SHARED_DIR):
+        filepath = os.path.join(SHARED_DIR, filename)
+        if os.path.isfile(filepath):
+            filesize = os.path.getsize(filepath)
+            num_chunks = (filesize + CHUNK_SIZE - 1) // CHUNK_SIZE
+
+            filehash = sha256sum(filepath)
+
+            file_chunks[filename] = {
+                "total_chunks": num_chunks,
+                "filehash": filehash
+            }
+    return file_chunks
+
+
 def listen_for_peers():
-    '''Listen for incoming peer discovery messages.
-    This function listens for UDP messages on the broadcast port and adds discovered peers to the set.
-    It runs in a separate thread to continuously listen for new peers.
-    '''
+    '''Listen for incoming peer discovery messages and update peer file lists.'''
+    global peer_files
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind(('', BROADCAST_PORT))
         while True:
-            data, addr = sock.recvfrom(1024)
-            if b"P2P_PEER_DISCOVERY" in data:
-                if (addr[0], data.split()[1]) not in peers: # (for the sake of notifying when new peer is added)
-                    print("New peer added", addr[0], data.split()[1])
-                    peers.add((addr[0], data.split()[1]))
-            else:
-                print(data)
+            data, addr = sock.recvfrom(65536)
+            try:
+                message = json.loads(data.decode())
+            except json.JSONDecodeError:
+                print(f"Invalid message from {addr}: {data}")
+                continue
+
+            if message.get("type") == "P2P_PEER_DISCOVERY":
+                port = message["port"]
+                files = message.get("files", {})
+                peer_id = (addr[0], str(port))
+
+                if peer_id not in peers:
+                    print("New peer added", addr[0], port)
+                    peers.add(peer_id)
+
+                peer_files[peer_id] = files
 
 
 def list_files():
-    '''List files available in the shared directory.
-    Displays the list of files that could be downloaded
-    '''
-    return "TBD"
+    '''List all available files across all peers, based on their hash, excluding own files (by hash).'''
+    files = {}
+
+    local_file_hashes = set()
+    for filename in os.listdir(SHARED_DIR):
+        filepath = os.path.join(SHARED_DIR, filename)
+        if os.path.isfile(filepath):
+            local_file_hashes.add(sha256sum(filepath))
+
+    for peer, file_info in peer_files.items():
+        for filename, info in file_info.items():
+            filehash = info["filehash"]
+
+            if filehash in local_file_hashes:
+                continue
+
+            if filehash not in files:
+                files[filehash] = {"filename": filename, "total_chunks": info["total_chunks"]}
+
+    output = []
+    for filehash, info in files.items():
+        filename = info["filename"]
+        chunk_count = info["total_chunks"]
+        output.append(f"{filename} (hash: {filehash}) - {chunk_count} chunk{'s' if chunk_count != 1 else ''}")
+
+    return "\n".join(output) if output else "No files available."
 
 
 def handle_client(conn, addr):
-    '''Handle incoming file requests from peers.
-    This function receives a connection from a peer, retrieves the requested file,
-    and sends it back to the peer in chunks.
-    '''
-    filename = conn.recv(1024).decode()
-    print(f"[{addr}] wants file: {filename}")
-    filepath = os.path.join(SHARED_DIR, filename)
+    '''Handle incoming file or chunk requests from peers.'''
+    request = conn.recv(1024).decode()
+    parts = request.strip().split()
+    
+    if parts[0] == "chunk" and len(parts) == 3:
+        _, filename, chunk_num = parts
+        chunk_num = int(chunk_num)
+        filepath = os.path.join(SHARED_DIR, filename)
 
-    if os.path.exists(filepath):
-        with open(filepath, 'rb') as f:
-            while chunk := f.read(CHUNK_SIZE):
-                conn.sendall(chunk)
+        if os.path.exists(filepath):
+            with open(filepath, 'rb') as f:
+                f.seek((chunk_num - 1) * CHUNK_SIZE)
+                chunk = f.read(CHUNK_SIZE)
+
+                chunk_hash = hashlib.sha256(chunk).hexdigest().encode()
+                conn.sendall(chunk_hash + chunk)  # Send hash first, then chunk
     conn.close()
 
 
