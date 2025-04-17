@@ -196,7 +196,7 @@ def download_file(filename):
     output_path = os.path.join(SHARED_DIR, f"dl_{filename}")
     with open(output_path, 'wb') as f_out:
         size_chunks = total_chunks
-        for chunk_num in range(1, size_chunks):
+        for chunk_num in range(1, size_chunks + 1):
             print(f" Combining... chunk {chunk_num} of {size_chunks}", end='   \r')
             chunk_path = os.path.join(temp_dir, f"{chunk_num}.chunk")
             with open(chunk_path, 'rb') as f_in:
