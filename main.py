@@ -160,29 +160,112 @@ def serve_files():
             threading.Thread(target=handle_client, args=(conn, addr), daemon=True).start()
 
 
-def request_file(peer_ip, filename):
-    '''Request a file from a peer.
-    This function connects to a peer's file server, sends the filename,
-    and receives the file in chunks, saving it to the shared directory.
-    '''
-    peer_port = 10000
-    if ':' in peer_ip:
-        peer_ip, peer_port = peer_ip.split(':')
-        peer_port = int(peer_port)
+def download_file(filename):
+    '''Download a file chunk-by-chunk from multiple peers, assuming they have all chunks.'''
+    global peer_files
+    expected_full_hash = None
+    total_chunks = None
+
+    owners = []
+    for peer, files in peer_files.items():
+        if filename in files:
+            file_info = files[filename]
+            if not expected_full_hash:
+                expected_full_hash = file_info["filehash"]
+                total_chunks = file_info["total_chunks"]
+            owners.append(peer)
+    if not owners:
+        print(f"No peers have file: {filename}")
+        return
+
+    temp_dir = os.path.join(SHARED_DIR, f"temp_{filename}")
+    os.makedirs(temp_dir, exist_ok=True)
+
+    download_success = {}
+    threads = []
+
+    for chunk_num in range(1, total_chunks + 1):
+        selected_peer = random.choice(owners)
+
+        thread = threading.Thread(
+            target=download_chunk,
+            args=(filename, chunk_num, [selected_peer], temp_dir, download_success)
+        )
+        thread.start()
+        threads.append(thread)
+
+    for t in threads:
+        t.join()
+
+    # Step 4: verify all chunks
+    missing_chunks = [c for c in range(1, total_chunks + 1) if not download_success.get(c)]
+    if missing_chunks:
+        print(f"Missing or corrupted chunks: {missing_chunks}, download failed.")
+        for file in os.listdir(temp_dir):
+            os.remove(os.path.join(temp_dir, file))
+        os.rmdir(temp_dir)
+        return
+
+    output_path = os.path.join(SHARED_DIR, f"dl_{filename}")
+    with open(output_path, 'wb') as f_out:
+        size_chunks = total_chunks
+        for chunk_num in range(1, size_chunks):
+            print(f" Combining... chunk {chunk_num} of {size_chunks}", end='   \r')
+            chunk_path = os.path.join(temp_dir, f"{chunk_num}.chunk")
+            with open(chunk_path, 'rb') as f_in:
+                f_out.write(f_in.read())
+
+    final_hash = sha256sum(output_path)
+    if final_hash != expected_full_hash:
+        print(f"Final file hash mismatch! Expected {expected_full_hash}, got {final_hash}")
     else:
-        for peer in peers:
-            if peer_ip in peer[0]:
-                peer_ip = peer[0]
-                peer_port = peer[1]
-    
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.connect((peer_ip, peer_port))
-        sock.send(filename.encode())
-        output_path = os.path.join(SHARED_DIR, f"dl_{filename}")
-        with open(output_path, 'wb') as f:
-            while chunk := sock.recv(CHUNK_SIZE):
-                f.write(chunk)
-        print(f"[+] Download complete: {output_path}")
+        print(f"Hashes Match! Download complete and verified: {output_path}")
+
+    for file in os.listdir(temp_dir):
+        os.remove(os.path.join(temp_dir, file))
+    os.rmdir(temp_dir)
+
+
+def download_chunk(filename, chunk_num, owners, temp_dir, download_success):
+    '''Try to download a single chunk from any available owner.'''
+    for peer_ip, peer_port in owners:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.connect((peer_ip, int(peer_port)))
+                request = f"chunk {filename} {chunk_num}"
+                sock.send(request.encode())
+
+                expected_hash = b'' # get hash
+                while len(expected_hash) < 64:
+                    data = sock.recv(64 - len(expected_hash))
+                    if not data:
+                        raise Exception("Connection closed before receiving full hash.")
+                    expected_hash += data
+                expected_hash = expected_hash.decode()
+
+                chunk_data = b'' # get rest of chunk
+                while len(chunk_data) < CHUNK_SIZE:
+                    data = sock.recv(CHUNK_SIZE - len(chunk_data))
+                    if not data:
+                        break
+                    chunk_data += data
+
+                actual_hash = hashlib.sha256(chunk_data).hexdigest()
+                if actual_hash != expected_hash:
+                    print(f"Hash mismatch for chunk {chunk_num} from {peer_ip}:{peer_port}")
+                    continue
+
+                chunk_path = os.path.join(temp_dir, f"{chunk_num}.chunk")
+                with open(chunk_path, 'wb') as f:
+                    f.write(chunk_data)
+                download_success[chunk_num] = True
+                print(f"Downloaded and verified chunk {chunk_num} from {peer_ip}:{peer_port}")
+                
+                return
+        except Exception as e:
+            print(f"Failed to get chunk {chunk_num} from {peer_ip}:{peer_port}: {e}")
+    print(f"Failed to download chunk {chunk_num}")
+    download_success[chunk_num] = False
 
 
 def sha256sum(path):
@@ -206,15 +289,15 @@ def command_line():
     print("Type 'list' to see available files, 'peers' to see known peers, 'get [ip] [filename]' to download a file, or 'quit' to exit.")
     global peers
     while True:
-        cmd = input("Command (list / peers / get [ip] [filename] / quit): ").strip().split()
+        cmd = input("Commands (list / peers / get [filename] / quit) ").strip().split()
         if not cmd:
             continue
         if cmd[0] in ("list", "l"):
             print("Available files:", list_files())
         elif cmd[0] == "peers":
             print("Known peers:", [f"{ip}:{int(port)}" for ip, port in peers])
-        elif cmd[0] == "get" and len(cmd) == 3:
-            request_file(cmd[1], cmd[2])
+        elif cmd[0] == "get" and len(cmd) == 2:
+            download_file(cmd[1])
         elif cmd[0] in ("q", "quit"):
             break
 
