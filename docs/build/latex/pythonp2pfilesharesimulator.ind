@@ -1,0 +1,47 @@
+\begin{sphinxtheindex}
+\let\bigletter\sphinxstyleindexlettergroup
+\let\spxpagem \sphinxstyleindexpagemain
+\let\spxentry \sphinxstyleindexentry
+\let\spxextra \sphinxstyleindexextra
+
+  \bigletter B
+  \item \spxentry{broadcast\_presence()}\spxextra{in module main}, \hyperpage{3}
+
+  \indexspace
+  \bigletter C
+  \item \spxentry{command\_line()}\spxextra{in module main}, \hyperpage{3}
+  \item \spxentry{conf}
+    \subitem \spxentry{module}, \hyperpage{5}
+
+  \indexspace
+  \bigletter D
+  \item \spxentry{download\_chunk()}\spxextra{in module main}, \hyperpage{3}
+  \item \spxentry{download\_file()}\spxextra{in module main}, \hyperpage{3}
+
+  \indexspace
+  \bigletter G
+  \item \spxentry{get\_my\_files()}\spxextra{in module main}, \hyperpage{3}
+
+  \indexspace
+  \bigletter H
+  \item \spxentry{handle\_client()}\spxextra{in module main}, \hyperpage{3}
+
+  \indexspace
+  \bigletter L
+  \item \spxentry{list\_files()}\spxextra{in module main}, \hyperpage{3}
+  \item \spxentry{listen\_for\_peers()}\spxextra{in module main}, \hyperpage{3}
+
+  \indexspace
+  \bigletter M
+  \item \spxentry{main}
+    \subitem \spxentry{module}, \hyperpage{3}
+  \item \spxentry{module}
+    \subitem \spxentry{conf}, \hyperpage{5}
+    \subitem \spxentry{main}, \hyperpage{3}
+
+  \indexspace
+  \bigletter S
+  \item \spxentry{serve\_files()}\spxextra{in module main}, \hyperpage{3}
+  \item \spxentry{sha256sum()}\spxextra{in module main}, \hyperpage{3}
+
+\end{sphinxtheindex}

@@ -9,17 +9,11 @@ import json
 
 
 BROADCAST_PORT = 9999
-try:
-    TRANSFER_PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 10000
-except ValueError:
-    print("Error: TRANSFER_PORT must be an integer.")
-    sys.exit(1)
-SHARED_DIR = f"shared/{TRANSFER_PORT}"
-
 CHUNK_SIZE = 1024
 
 peers = set()
 peer_files = {}
+
 
 def broadcast_presence():
     '''Broadcast presence and local files on the network.'''
@@ -294,6 +288,13 @@ if __name__ == "__main__":
     This function initializes the shared directory, starts the broadcast and listening threads,
     and launches the command line interface for user interaction.
     '''
+    try:
+        TRANSFER_PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 10000
+    except ValueError:
+        print("Error: TRANSFER_PORT must be an integer.")
+        sys.exit(1)
+    SHARED_DIR = f"shared/{TRANSFER_PORT}"
+
     os.makedirs(SHARED_DIR, exist_ok=True)
     threading.Thread(target=broadcast_presence, daemon=True).start()
     threading.Thread(target=listen_for_peers, daemon=True).start()

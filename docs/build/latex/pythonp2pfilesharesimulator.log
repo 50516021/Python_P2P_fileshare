@@ -1,9 +1,9 @@
-This is pdfTeX, Version 3.14159265-2.6-1.40.20 (TeX Live 2019) (preloaded format=pdflatex 2019.11.8)  8 FEB 2025 02:45
+This is pdfTeX, Version 3.14159265-2.6-1.40.20 (TeX Live 2019) (preloaded format=pdflatex 2019.11.8)  18 APR 2025 16:01
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
-**packetanalyser.tex
-(./packetanalyser.tex
+**pythonp2pfilesharesimulator.tex
+(./pythonp2pfilesharesimulator.tex
 LaTeX2e <2018-12-01>
 (./sphinxmanual.cls
 Document Class: sphinxmanual 2019/12/01 v2.3.0 Document class (Sphinx manual)
@@ -180,7 +180,7 @@ Package: fncychap 2007/07/30 v1.34 LaTeX package (Revised chapters)
 \c@AlphaDecCnt=\count104
 )
 (./sphinx.sty
-Package: sphinx 2024/10/11 v8.1.1 Sphinx LaTeX package (sphinx-doc)
+Package: sphinx 2024/11/23 v8.2.0 Sphinx LaTeX package (sphinx-doc)
  (/usr/local/texlive/2019/texmf-dist/tex/latex/xcolor/xcolor.sty
 Package: xcolor 2016/05/11 v2.12 LaTeX color extensions (UK)
 
@@ -684,7 +684,7 @@ Package: titlesec 2016/03/21 v2.10.2 Sectioning titles
 (./sphinxlatexstyletext.sty
 Package: sphinxlatexstyletext 2024/07/28 v8.1.0 text styling
 ) (./sphinxlatexobjects.sty
-Package: sphinxlatexobjects 2023/07/23 documentation environments
+Package: sphinxlatexobjects 2025/02/11 documentation environments
 \sphinxsignaturesep=\skip74
 \sphinxsignaturelistskip=\skip75
 \py@argswidth=\skip76
@@ -835,12 +835,12 @@ Package: hypcap 2016/05/16 v1.12 Adjusting the anchors of captions (HO)
 Package: sphinxmessages 2019/01/04 v2.0 Localized LaTeX macros (Sphinx team)
 )
 \@indexfile=\write4
-\openout4 = `packetanalyser.idx'.
+\openout4 = `pythonp2pfilesharesimulator.idx'.
 
 
-Writing index file packetanalyser.idx
-(./packetanalyser.aux)
-\openout1 = `packetanalyser.aux'.
+Writing index file pythonp2pfilesharesimulator.idx
+(./pythonp2pfilesharesimulator.aux)
+\openout1 = `pythonp2pfilesharesimulator.aux'.
 
 LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 73.
 LaTeX Font Info:    ... okay on input line 73.
@@ -1129,9 +1129,9 @@ LaTeX Info: Redefining \ref on input line 73.
 LaTeX Info: Redefining \pageref on input line 73.
 LaTeX Info: Redefining \nameref on input line 73.
 
-(./packetanalyser.out) (./packetanalyser.out)
+(./pythonp2pfilesharesimulator.out) (./pythonp2pfilesharesimulator.out)
 \@outlinefile=\write5
-\openout5 = `packetanalyser.out'.
+\openout5 = `pythonp2pfilesharesimulator.out'.
 
 Package hyperref Info: Option `pageanchor' set `false' on input line 81.
 LaTeX Font Info:    Try loading font information for T1+qhv on input line 81.
@@ -1154,9 +1154,9 @@ File: umsb.fd 2013/01/14 v3.01 AMS symbols B
 
 
 ]
-(./packetanalyser.toc)
+(./pythonp2pfilesharesimulator.toc)
 \tf@toc=\write6
-\openout6 = `packetanalyser.toc'.
+\openout6 = `pythonp2pfilesharesimulator.toc'.
 
  [1
 
@@ -1179,52 +1179,46 @@ LaTeX Font Info:    Font shape `T1/txtt/b/n' in size <10> not available
 Chapter 2.
 [5] [6
 
-]
-Chapter 3.
-[7] [8
-
-]
-Chapter 4.
-[9] [10] [11
+] [7
 
 
+] (./pythonp2pfilesharesimulator.ind [8
 
-] (./packetanalyser.ind [12
 
-
-] [13
+] [9
 
 
 ])
-Package atveryend Info: Empty hook `BeforeClearDocument' on input line 449.
-Package atveryend Info: Empty hook `AfterLastShipout' on input line 449.
- (./packetanalyser.aux)
-Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 449.
-Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 449.
-Package rerunfilecheck Info: File `packetanalyser.out' has not changed.
-(rerunfilecheck)             Checksum: 326E76E03410AE3AF44E73B59740F9F6;769.
+Package atveryend Info: Empty hook `BeforeClearDocument' on input line 285.
+Package atveryend Info: Empty hook `AfterLastShipout' on input line 285.
+
+(./pythonp2pfilesharesimulator.aux)
+Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 285.
+Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 285.
+Package rerunfilecheck Info: File `pythonp2pfilesharesimulator.out' has not cha
+nged.
+(rerunfilecheck)             Checksum: 64022BDCF793F04EEA87BF9C219B9290;525.
  ) 
 Here is how much of TeX's memory you used:
- 27859 strings out of 492616
- 488146 string characters out of 6129481
- 525116 words of memory out of 5000000
+ 27865 strings out of 492616
+ 488039 string characters out of 6129481
+ 524714 words of memory out of 5000000
  31378 multiletter control sequences out of 15000+600000
- 575392 words of font info for 54 fonts, out of 8000000 for 9000
+ 576683 words of font info for 60 fonts, out of 8000000 for 9000
  1142 hyphenation exceptions out of 8191
- 44i,11n,63p,1203b,560s stack positions out of 5000i,500n,10000p,200000b,80000s
+ 44i,11n,63p,1216b,454s stack positions out of 5000i,500n,10000p,200000b,80000s
 {/usr/local/texlive/2019/texmf-dist/fonts/enc/dvips/tex-gyre/q-ec.enc}</usr/l
 ocal/texlive/2019/texmf-dist/fonts/type1/public/tex-gyre/qhvb.pfb></usr/local/t
-exlive/2019/texmf-dist/fonts/type1/public/tex-gyre/qhvbi.pfb></usr/local/texliv
-e/2019/texmf-dist/fonts/type1/public/tex-gyre/qhvr.pfb></usr/local/texlive/2019
-/texmf-dist/fonts/type1/public/tex-gyre/qtmb.pfb></usr/local/texlive/2019/texmf
--dist/fonts/type1/public/tex-gyre/qtmr.pfb></usr/local/texlive/2019/texmf-dist/
-fonts/type1/public/tex-gyre/qtmri.pfb></usr/local/texlive/2019/texmf-dist/fonts
-/type1/public/txfonts/t1xbtt.pfb></usr/local/texlive/2019/texmf-dist/fonts/type
-1/public/txfonts/t1xtt.pfb>
-Output written on packetanalyser.pdf (17 pages, 156690 bytes).
+exlive/2019/texmf-dist/fonts/type1/public/tex-gyre/qhvr.pfb></usr/local/texlive
+/2019/texmf-dist/fonts/type1/public/tex-gyre/qtmb.pfb></usr/local/texlive/2019/
+texmf-dist/fonts/type1/public/tex-gyre/qtmr.pfb></usr/local/texlive/2019/texmf-
+dist/fonts/type1/public/tex-gyre/qtmri.pfb></usr/local/texlive/2019/texmf-dist/
+fonts/type1/public/txfonts/t1xbtt.pfb></usr/local/texlive/2019/texmf-dist/fonts
+/type1/public/txfonts/t1xtt.pfb>
+Output written on pythonp2pfilesharesimulator.pdf (13 pages, 140804 bytes).
 PDF statistics:
- 192 PDF objects out of 1000 (max. 8388607)
- 158 compressed objects within 2 object streams
- 36 named destinations out of 1000 (max. 500000)
- 69 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 157 PDF objects out of 1000 (max. 8388607)
+ 128 compressed objects within 2 object streams
+ 29 named destinations out of 1000 (max. 500000)
+ 61 words of extra memory for PDF output out of 10000 (max. 10000000)
 

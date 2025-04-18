@@ -1,7 +1,8 @@
-CSCI651_hw1
-===========
+CSCI651_fp
+==========
 
 .. toctree::
    :maxdepth: 4
 
-   pktsniffer
+   conf
+   main
