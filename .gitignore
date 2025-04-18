@@ -1,2 +1,4 @@
 # Add your own big files for testing
 big_*
+dl_big_*
+*.chunk

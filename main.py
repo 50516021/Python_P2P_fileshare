@@ -1,25 +1,12 @@
 import socket
 import threading
+import random
 import os
 import hashlib
 import time
 import sys
+import json
 
-# TODO
-# Store a list of available chunks for each file (files are split into multiple chunks, 1, 2, 3... and you broadcast what chunks you have)
-
-# Maintain a list of files available on each peer locally
-# - Broadcast your own files
-# - Receive other broadcasts
-# - Can just be done on the same broadcast port I think... would not work in a real network (scaling issues), but does in this case
-# - So just stick this info in the current broadcast message
-
-# Instead of chunking between just two peers, peers need to be able to receive from multiple at once (every peer who has chunks)
-# - Figure out all the chunks we need, and request them individually
-
-# Verify via hashes
-# - Check hash of each chunk as we get it
-# - Check hash of full file at end
 
 BROADCAST_PORT = 9999
 try:
@@ -29,59 +16,119 @@ except ValueError:
     sys.exit(1)
 SHARED_DIR = f"shared/{TRANSFER_PORT}"
 
+CHUNK_SIZE = 1024
+
 peers = set()
+peer_files = {}
 
 def broadcast_presence():
-    '''Broadcast presence on the network to discover peers.
-    This function sends a broadcast message every 5 seconds to announce the presence of this peer.
-    It uses UDP sockets to send the message to the broadcast address.
-    ''' 
+    '''Broadcast presence and local files on the network.'''
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         while True:
-            message = f"P2P_PEER_DISCOVERY {TRANSFER_PORT}".encode()
-            sock.sendto(message, ("<broadcast>", BROADCAST_PORT))
+            files = get_my_files()
+            message = {
+                "type": "P2P_PEER_DISCOVERY",
+                "port": TRANSFER_PORT,
+                "files": files
+            }
+            sock.sendto(json.dumps(message).encode(), ("<broadcast>", BROADCAST_PORT))
             time.sleep(5)
 
 
+def get_my_files():
+    '''Get a list of available files and their total number of chunks and their full SHA-256 hash.'''
+    file_chunks = {}
+    if not os.path.exists(SHARED_DIR):
+        return file_chunks
+
+    for filename in os.listdir(SHARED_DIR):
+        filepath = os.path.join(SHARED_DIR, filename)
+        if os.path.isfile(filepath):
+            filesize = os.path.getsize(filepath)
+            num_chunks = (filesize + CHUNK_SIZE - 1) // CHUNK_SIZE
+
+            filehash = sha256sum(filepath)
+
+            file_chunks[filename] = {
+                "total_chunks": num_chunks,
+                "filehash": filehash
+            }
+    return file_chunks
+
+
 def listen_for_peers():
-    '''Listen for incoming peer discovery messages.
-    This function listens for UDP messages on the broadcast port and adds discovered peers to the set.
-    It runs in a separate thread to continuously listen for new peers.
-    '''
+    '''Listen for incoming peer discovery messages and update peer file lists.'''
+    global peer_files
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind(('', BROADCAST_PORT))
         while True:
-            data, addr = sock.recvfrom(1024)
-            if b"P2P_PEER_DISCOVERY" in data:
-                if (addr[0], data.split()[1]) not in peers: # (for the sake of notifying when new peer is added)
-                    print("New peer added", addr[0], data.split()[1])
-                    peers.add((addr[0], data.split()[1]))
-            else:
-                print(data)
+            data, addr = sock.recvfrom(65536)
+            try:
+                message = json.loads(data.decode())
+            except json.JSONDecodeError:
+                print(f"Invalid message from {addr}: {data}")
+                continue
+
+            if message.get("type") == "P2P_PEER_DISCOVERY":
+                port = message["port"]
+                files = message.get("files", {})
+                peer_id = (addr[0], str(port))
+
+                if peer_id not in peers:
+                    print("New peer added", addr[0], port)
+                    peers.add(peer_id)
+
+                peer_files[peer_id] = files
 
 
 def list_files():
-    '''List files available in the shared directory.
-    Displays the list of files that could be downloaded
-    '''
-    return "TBD"
+    '''List all available files across all peers, based on their hash, excluding own files (by hash).'''
+    files = {}
+
+    local_file_hashes = set()
+    for filename in os.listdir(SHARED_DIR):
+        filepath = os.path.join(SHARED_DIR, filename)
+        if os.path.isfile(filepath):
+            local_file_hashes.add(sha256sum(filepath))
+
+    for peer, file_info in peer_files.items():
+        for filename, info in file_info.items():
+            filehash = info["filehash"]
+
+            if filehash in local_file_hashes:
+                continue
+
+            if filehash not in files:
+                files[filehash] = {"filename": filename, "total_chunks": info["total_chunks"]}
+
+    output = []
+    for filehash, info in files.items():
+        filename = info["filename"]
+        chunk_count = info["total_chunks"]
+        output.append(f"{filename} (hash: {filehash}) - {chunk_count} chunk{'s' if chunk_count != 1 else ''}")
+
+    return "\n".join(output) if output else "No files available."
 
 
 def handle_client(conn, addr):
-    '''Handle incoming file requests from peers.
-    This function receives a connection from a peer, retrieves the requested file,
-    and sends it back to the peer in chunks.
-    '''
-    filename = conn.recv(1024).decode()
-    print(f"[{addr}] wants file: {filename}")
-    filepath = os.path.join(SHARED_DIR, filename)
+    '''Handle incoming file or chunk requests from peers.'''
+    request = conn.recv(1024).decode()
+    parts = request.strip().split()
+    
+    if parts[0] == "chunk" and len(parts) == 3:
+        _, filename, chunk_num = parts
+        chunk_num = int(chunk_num)
+        filepath = os.path.join(SHARED_DIR, filename)
 
-    if os.path.exists(filepath):
-        with open(filepath, 'rb') as f:
-            while chunk := f.read(CHUNK_SIZE):
-                conn.sendall(chunk)
+        if os.path.exists(filepath):
+            with open(filepath, 'rb') as f:
+                f.seek((chunk_num - 1) * CHUNK_SIZE)
+                chunk = f.read(CHUNK_SIZE)
+
+                chunk_hash = hashlib.sha256(chunk).hexdigest().encode()
+                conn.sendall(chunk_hash + chunk)  # Send hash first, then chunk
     conn.close()
 
 
@@ -100,29 +147,112 @@ def serve_files():
             threading.Thread(target=handle_client, args=(conn, addr), daemon=True).start()
 
 
-def request_file(peer_ip, filename):
-    '''Request a file from a peer.
-    This function connects to a peer's file server, sends the filename,
-    and receives the file in chunks, saving it to the shared directory.
-    '''
-    peer_port = 10000
-    if ':' in peer_ip:
-        peer_ip, peer_port = peer_ip.split(':')
-        peer_port = int(peer_port)
+def download_file(filename):
+    '''Download a file chunk-by-chunk from multiple peers, assuming they have all chunks.'''
+    global peer_files
+    expected_full_hash = None
+    total_chunks = None
+
+    owners = []
+    for peer, files in peer_files.items():
+        if filename in files:
+            file_info = files[filename]
+            if not expected_full_hash:
+                expected_full_hash = file_info["filehash"]
+                total_chunks = file_info["total_chunks"]
+            owners.append(peer)
+    if not owners:
+        print(f"No peers have file: {filename}")
+        return
+
+    temp_dir = os.path.join(SHARED_DIR, f"temp_{filename}")
+    os.makedirs(temp_dir, exist_ok=True)
+
+    download_success = {}
+    threads = []
+
+    for chunk_num in range(1, total_chunks + 1):
+        selected_peer = random.choice(owners)
+
+        thread = threading.Thread(
+            target=download_chunk,
+            args=(filename, chunk_num, [selected_peer], temp_dir, download_success)
+        )
+        thread.start()
+        threads.append(thread)
+
+    for t in threads:
+        t.join()
+
+    # Step 4: verify all chunks
+    missing_chunks = [c for c in range(1, total_chunks + 1) if not download_success.get(c)]
+    if missing_chunks:
+        print(f"Missing or corrupted chunks: {missing_chunks}, download failed.")
+        for file in os.listdir(temp_dir):
+            os.remove(os.path.join(temp_dir, file))
+        os.rmdir(temp_dir)
+        return
+
+    output_path = os.path.join(SHARED_DIR, f"dl_{filename}")
+    with open(output_path, 'wb') as f_out:
+        size_chunks = total_chunks
+        for chunk_num in range(1, size_chunks + 1):
+            print(f" Combining... chunk {chunk_num} of {size_chunks}", end='   \r')
+            chunk_path = os.path.join(temp_dir, f"{chunk_num}.chunk")
+            with open(chunk_path, 'rb') as f_in:
+                f_out.write(f_in.read())
+
+    final_hash = sha256sum(output_path)
+    if final_hash != expected_full_hash:
+        print(f"Final file hash mismatch! Expected {expected_full_hash}, got {final_hash}")
     else:
-        for peer in peers:
-            if peer_ip in peer[0]:
-                peer_ip = peer[0]
-                peer_port = peer[1]
-    
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.connect((peer_ip, peer_port))
-        sock.send(filename.encode())
-        output_path = os.path.join(SHARED_DIR, f"dl_{filename}")
-        with open(output_path, 'wb') as f:
-            while chunk := sock.recv(CHUNK_SIZE):
-                f.write(chunk)
-        print(f"[+] Download complete: {output_path}")
+        print(f"Hashes Match! Download complete and verified: {output_path}")
+
+    for file in os.listdir(temp_dir):
+        os.remove(os.path.join(temp_dir, file))
+    os.rmdir(temp_dir)
+
+
+def download_chunk(filename, chunk_num, owners, temp_dir, download_success):
+    '''Try to download a single chunk from any available owner.'''
+    for peer_ip, peer_port in owners:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.connect((peer_ip, int(peer_port)))
+                request = f"chunk {filename} {chunk_num}"
+                sock.send(request.encode())
+
+                expected_hash = b'' # get hash
+                while len(expected_hash) < 64:
+                    data = sock.recv(64 - len(expected_hash))
+                    if not data:
+                        raise Exception("Connection closed before receiving full hash.")
+                    expected_hash += data
+                expected_hash = expected_hash.decode()
+
+                chunk_data = b'' # get rest of chunk
+                while len(chunk_data) < CHUNK_SIZE:
+                    data = sock.recv(CHUNK_SIZE - len(chunk_data))
+                    if not data:
+                        break
+                    chunk_data += data
+
+                actual_hash = hashlib.sha256(chunk_data).hexdigest()
+                if actual_hash != expected_hash:
+                    print(f"Hash mismatch for chunk {chunk_num} from {peer_ip}:{peer_port}")
+                    continue
+
+                chunk_path = os.path.join(temp_dir, f"{chunk_num}.chunk")
+                with open(chunk_path, 'wb') as f:
+                    f.write(chunk_data)
+                download_success[chunk_num] = True
+                print(f"Downloaded and verified chunk {chunk_num} from {peer_ip}:{peer_port}")
+                
+                return
+        except Exception as e:
+            print(f"Failed to get chunk {chunk_num} from {peer_ip}:{peer_port}: {e}")
+    print(f"Failed to download chunk {chunk_num}")
+    download_success[chunk_num] = False
 
 
 def sha256sum(path):
@@ -146,15 +276,15 @@ def command_line():
     print("Type 'list' to see available files, 'peers' to see known peers, 'get [ip] [filename]' to download a file, or 'quit' to exit.")
     global peers
     while True:
-        cmd = input("Command (list / peers / get [ip] [filename] / quit): ").strip().split()
+        cmd = input("Commands (list / peers / get [filename] / quit) ").strip().split()
         if not cmd:
             continue
         if cmd[0] in ("list", "l"):
             print("Available files:", list_files())
         elif cmd[0] == "peers":
             print("Known peers:", [f"{ip}:{int(port)}" for ip, port in peers])
-        elif cmd[0] == "get" and len(cmd) == 3:
-            request_file(cmd[1], cmd[2])
+        elif cmd[0] == "get" and len(cmd) == 2:
+            download_file(cmd[1])
         elif cmd[0] in ("q", "quit"):
             break
 
