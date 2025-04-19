@@ -1,0 +1,30 @@
+Project: Implementing P2P File Sharing Software
+Due Date: 18 April 2025
+Objective
+Work as a group of two students.The goal of this project is to develop a simple peer-to-peer (P2P) file-sharing application. This software will allow multiple users to share files without relying on a centralized server, similar to protocols used in BitTorrent or Gnutella.
+
+Technical Requirements
+Peer Discovery: Implement a mechanism for peers to discover each other.
+Indexing and Searching: Maintain a list of available data on each peer.
+Data Transfer Mechanism: Peers should be able to request and download data from other peers.
+Concurrency and Threading: Implement multi-threading to handle multiple connections simultaneously.
+Chunked File Transfer: Implement file transfer in chunks.
+Verifying File Integrity: Implement a verification mechanism that checks if the downloaded file was corrupted or not.
+User Interface: A basic command-line or graphical interface.
+See this link if you want to see how BitTorrent works
+This is another useful link
+Instructions
+Programming Language:
+You must use Python to implement your code (Useful link: https://www.python.org)
+Follow the PEP 8 coding guidelines for writing clean and professional Python code. (Here is a link: https://peps.python.org/pep-0008/)
+Use git for version control of your code
+Code Documentation and Comments:
+Properly comment your code to make it clear and understandable
+Generate a PDF documentation for your code using a tool like Sphinx that automatically generates it for you. (see this link:  https://www.sphinx-doc.org/en/master/). There are other tools that provide similar functionality (i.e. automatically generates documentation for you). You can use any of them if you dont like sphinx
+What to Submit: There should be just one submission per group. All files must be submitted in a single zip file. Name the zip file <firstname>_<lastname>_project.zip (replace <firstname> and <lastname> with your name). The zip will have atleast the following files:
+Python code: Python files containing the code you wrote
+Requirements File: Submit a requirements.txt file listing all the Python dependencies required to run your code. (See this link: https://www.geeksforgeeks.org/how-to-create-requirements-txt-file-in-python/)
+Readme: A README.md file that clearly explains: 1- How to compile and run your code. 2- Examples of command-line usage
+Report (PDF): The report must be in pdf format. Make sure to include names and rit emails for each student in your group
+Code Documentation: It must be in PDF format. Use a tool like Sphinx to automatically generate documentation. You can use any other similar tool if you want.
+GIT Log: Use Git for version control and make commits at appropriate points during development. Submit a git log file showing the commit history. This file should be name revisions.txt

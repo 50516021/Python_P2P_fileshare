@@ -10,6 +10,12 @@ import json
 
 BROADCAST_PORT = 9999
 CHUNK_SIZE = 1024
+try:
+    TRANSFER_PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 10000
+except ValueError:
+    print("Error: TRANSFER_PORT must be an integer.")
+    sys.exit(1)
+SHARED_DIR = f"shared/{TRANSFER_PORT}"
 
 peers = set()
 peer_files = {}
@@ -56,13 +62,19 @@ def listen_for_peers():
     global peer_files
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)  # critical for multi-peer on macOS/Linux
+        except (AttributeError, OSError) as e:
+            print(f"SO_REUSEPORT not available: {e}")
+        
         sock.bind(('', BROADCAST_PORT))
+        
         while True:
             data, addr = sock.recvfrom(65536)
             try:
                 message = json.loads(data.decode())
-            except json.JSONDecodeError:
-                print(f"Invalid message from {addr}: {data}")
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                print(f"Received invalid data from {addr}, skipping...")
                 continue
 
             if message.get("type") == "P2P_PEER_DISCOVERY":
@@ -108,22 +120,42 @@ def list_files():
 
 def handle_client(conn, addr):
     '''Handle incoming file or chunk requests from peers.'''
-    request = conn.recv(1024).decode()
-    parts = request.strip().split()
-    
-    if parts[0] == "chunk" and len(parts) == 3:
+    try:
+        conn.settimeout(5)  # <--- Add timeout, super important
+        request = conn.recv(1024)
+        if not request:
+            print(f"[{addr}] No data received, closing connection.")
+            return
+        request = request.decode(errors='ignore')  # ignore broken encoding
+        parts = request.strip().split()
+
+        if len(parts) != 3 or parts[0] != "chunk":
+            print(f"[{addr}] Invalid request format: {request}")
+            return
+
         _, filename, chunk_num = parts
         chunk_num = int(chunk_num)
         filepath = os.path.join(SHARED_DIR, filename)
 
-        if os.path.exists(filepath):
-            with open(filepath, 'rb') as f:
-                f.seek((chunk_num - 1) * CHUNK_SIZE)
-                chunk = f.read(CHUNK_SIZE)
+        if not os.path.exists(filepath):
+            print(f"[{addr}] Requested file not found: {filename}")
+            return
 
-                chunk_hash = hashlib.sha256(chunk).hexdigest().encode()
-                conn.sendall(chunk_hash + chunk)  # Send hash first, then chunk
-    conn.close()
+        with open(filepath, 'rb') as f:
+            f.seek((chunk_num - 1) * CHUNK_SIZE)
+            chunk = f.read(CHUNK_SIZE)
+
+            chunk_hash = hashlib.sha256(chunk).hexdigest().encode()
+            try:
+                conn.sendall(chunk_hash + chunk)
+            except Exception as e:
+                print(f"[{addr}] Failed to send chunk: {e}")
+    except (socket.timeout, ConnectionResetError, OSError) as e:
+        print(f"[{addr}] Connection error during handling: {e}")
+    except Exception as e:
+        print(f"[{addr}] Unexpected error: {e}")
+    finally:
+        conn.close()
 
 
 def serve_files():
@@ -133,12 +165,19 @@ def serve_files():
     It runs in a separate thread to allow concurrent file serving.
     '''
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server.bind(('', TRANSFER_PORT))
         server.listen()
         print(f"[+] Listening for file requests on port {TRANSFER_PORT}")
+        
         while True:
-            conn, addr = server.accept()
-            threading.Thread(target=handle_client, args=(conn, addr), daemon=True).start()
+            try:
+                conn, addr = server.accept()
+                if conn:
+                    threading.Thread(target=handle_client, args=(conn, addr), daemon=True).start()
+            except OSError as e:
+                print(f"Server socket error: {e}")
+                continue
 
 
 def download_file(filename):
@@ -207,16 +246,27 @@ def download_file(filename):
     os.rmdir(temp_dir)
 
 
-def download_chunk(filename, chunk_num, owners, temp_dir, download_success):
+def download_chunk(filename, chunk_num, owners, temp_dir, download_success, max_retries=5):
     '''Try to download a single chunk from any available owner.'''
-    for peer_ip, peer_port in owners:
+    attempts = 0
+    tried_peers = set()
+
+    while attempts < max_retries:
+        available_peers = [peer for peer in owners if peer not in tried_peers]
+        if not available_peers:
+            available_peers = owners  # retry any peer if all have been tried once
+
+        selected_peer = random.choice(available_peers)
+        peer_ip, peer_port = selected_peer
+
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.settimeout(5)  # prevent hanging forever
                 sock.connect((peer_ip, int(peer_port)))
                 request = f"chunk {filename} {chunk_num}"
                 sock.send(request.encode())
 
-                expected_hash = b'' # get hash
+                expected_hash = b''
                 while len(expected_hash) < 64:
                     data = sock.recv(64 - len(expected_hash))
                     if not data:
@@ -224,7 +274,7 @@ def download_chunk(filename, chunk_num, owners, temp_dir, download_success):
                     expected_hash += data
                 expected_hash = expected_hash.decode()
 
-                chunk_data = b'' # get rest of chunk
+                chunk_data = b''
                 while len(chunk_data) < CHUNK_SIZE:
                     data = sock.recv(CHUNK_SIZE - len(chunk_data))
                     if not data:
@@ -234,18 +284,24 @@ def download_chunk(filename, chunk_num, owners, temp_dir, download_success):
                 actual_hash = hashlib.sha256(chunk_data).hexdigest()
                 if actual_hash != expected_hash:
                     print(f"Hash mismatch for chunk {chunk_num} from {peer_ip}:{peer_port}")
-                    continue
+                    tried_peers.add(selected_peer)
+                    attempts += 1
+                    continue  # retry
 
                 chunk_path = os.path.join(temp_dir, f"{chunk_num}.chunk")
                 with open(chunk_path, 'wb') as f:
                     f.write(chunk_data)
                 download_success[chunk_num] = True
                 print(f"Downloaded and verified chunk {chunk_num} from {peer_ip}:{peer_port}")
-                
-                return
+                return  # Success!
+
         except Exception as e:
             print(f"Failed to get chunk {chunk_num} from {peer_ip}:{peer_port}: {e}")
-    print(f"Failed to download chunk {chunk_num}")
+            tried_peers.add(selected_peer)
+            attempts += 1
+
+    # If we exit the loop, we failed
+    print(f"Failed to download chunk {chunk_num} after {max_retries} attempts.")
     download_success[chunk_num] = False
 
 
@@ -274,7 +330,7 @@ def command_line():
         if not cmd:
             continue
         if cmd[0] in ("list", "l"):
-            print("Available files:", list_files())
+            print("Available files:\n", list_files())
         elif cmd[0] == "peers":
             print("Known peers:", [f"{ip}:{int(port)}" for ip, port in peers])
         elif cmd[0] == "get" and len(cmd) == 2:
@@ -288,12 +344,6 @@ if __name__ == "__main__":
     This function initializes the shared directory, starts the broadcast and listening threads,
     and launches the command line interface for user interaction.
     '''
-    try:
-        TRANSFER_PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 10000
-    except ValueError:
-        print("Error: TRANSFER_PORT must be an integer.")
-        sys.exit(1)
-    SHARED_DIR = f"shared/{TRANSFER_PORT}"
 
     os.makedirs(SHARED_DIR, exist_ok=True)
     threading.Thread(target=broadcast_presence, daemon=True).start()

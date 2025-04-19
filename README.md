@@ -38,6 +38,7 @@ python main.py [TRANSFER_PORT]
 ```
 
 - `TRANSFER_PORT` (optional): The port number for file transfers. Defaults to `10000`.
+  (port 10000 is for two machines)
 
 This will:
 
